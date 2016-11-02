@@ -51,11 +51,6 @@ import time
 import getpass
 import itertools
 import logging
-
-try:
-    from termcolor import colored
-except:
-    def colored(line, color): return line
         
 import pandas as pd
 import datetime
@@ -76,6 +71,20 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
                     datefmt='%m/%d/%Y %I:%M:%S %p')
 
 global load_bar
+global color_term
+
+try:
+    from termcolor import colored as termcolor
+    color_term = True
+except:
+    def termcolor(line, color): return line
+    color_term = False
+
+def colored(line, color):
+    global color_term
+    if color_term: return termcolor(line, color)
+    else:          return line
+
 pid = os.getpid()
 
 # FILES
@@ -202,9 +211,7 @@ class easy_or(cmd.Cmd, Import, object):
 
     def __init__(self, conf, desconf, db, interactive=True, quiet=False, refresh=True):
         cmd.Cmd.__init__(self)
-        self.intro = colored(
-            "\neasyaccess  %s. The DESDM Database shell. \n* Type 'help' or '?' to list commands. *\n" % __version__,
-            "cyan")
+        self.intro = "\neasyaccess v%s. The DESDM Database shell. \n* Type 'help' or '?' to list commands. *\n" % __version__
         self.writeconfig = False
         self.config = conf
         self.quiet = quiet
@@ -222,14 +229,16 @@ class easy_or(cmd.Cmd, Import, object):
         self.trim_whitespace = self.config.getboolean('easyaccess', 'trim_whitespace')
 
         self.dbname = db
-        self.savePrompt = colored('_________', 'cyan') + '\nDESDB ~> '
+        # This does not respect setting 'color_terminal' interactively
+        #self.savePrompt = colored('_________', 'cyan') + '\nDESDB ~> '
+        self.savePrompt = '_________' + '\nDESDB ~> '
         self.prompt = self.savePrompt
         self.buff = None
         self.interactive = interactive
         self.undoc_header = None
         self.metadata = True
-        self.doc_header = colored(' *General Commands*', "cyan") + ' (type help <command>):'
-        self.docdb_header = colored('\n *DB Commands*', "cyan") + '      (type help <command>):'
+        self.doc_header = ' *General Commands*' + ' (type help <command>):'
+        self.docdb_header = '\n *DB Commands*' + '      (type help <command>):'
         # connect to db
         self.user = self.desconfig.get('db-' + self.dbname, 'user')
         self.dbhost = self.desconfig.get('db-' + self.dbname, 'server')
@@ -315,7 +324,7 @@ class easy_or(cmd.Cmd, Import, object):
                         # self.do_clear(None) #not cleaning screen
                         print()
                     dl.print_deslogo(color_term)
-                    self.stdout.write(str(self.intro) + "\n")
+                    self.stdout.write(colored(self.intro,'cyan') + "\n")
             stop = None
             while not stop:
                 if self.cmdqueue:
@@ -371,7 +380,7 @@ class easy_or(cmd.Cmd, Import, object):
         else:
             self.do_clear(None)
             dl.print_deslogo(color_term)
-            self.stdout.write(str(self.intro) + "\n")
+            self.stdout.write(colored(self.intro,'cyan') + "\n")
             names = self.get_names()
             cmds_doc = []
             cmds_undoc = []
@@ -401,8 +410,8 @@ class easy_or(cmd.Cmd, Import, object):
                     else:
                         cmds_undoc.append(cmd)
             self.stdout.write("%s\n" % str(self.doc_leader))
-            self.print_topics(self.doc_header, cmds_doc, 15, 80)
-            self.print_topics(self.docdb_header, cmds_db, 15, 80)
+            self.print_topics(colored(self.doc_header,'cyan'),cmds_doc,15,80)
+            self.print_topics(colored(self.docdb_header,'cyan'),cmds_db,15,80)
             self.print_topics(self.misc_header, list(help.keys()), 15, 80)
             self.print_topics(self.undoc_header, cmds_undoc, 15, 80)
 
@@ -410,10 +419,10 @@ class easy_or(cmd.Cmd, Import, object):
             print('===================================================')
             print("* To run SQL queries just add ; at the end of query")
             print("* To write to a file  : select ... from ... where ... ; > filename")
-            print(colored("* Supported file formats (.csv, .tab., .fits, .h5) ", "green"))
+            print(colored("    Supported file formats (.csv, .tab., .fits, .h5) ", "green"))
             print("* To check SQL syntax : select ... from ... where ... ; < check")
             print("* To see the Oracle execution plan  : select ... from ... where ... ; < explain")
-            print()
+            #print()
             print("* To access an online tutorial type: online_tutorial ")
 
 
@@ -1206,6 +1215,7 @@ class easy_or(cmd.Cmd, Import, object):
 
         """
         global load_bar
+        global color_term
         if line == '': return self.do_help('config')
         oneline = "".join(line.split())
         if oneline.find('show') > -1:
@@ -1233,16 +1243,21 @@ class easy_or(cmd.Cmd, Import, object):
             key = oneline.split('set')[0]
             val = oneline.split('set')[1]
             if val == '': return self.do_help('config')
+            # ADW: I don't think these are used any more
             int_keys = ['prefetch', 'histcache', 'timeout', 'max_rows', 'width', 'max_columns', 'outfile_max_mb',
-                        'nullvalue', 'loading_bar', 'autocommit', 'max_col_width']
+                        'nullvalue', 'loading_bar', 'autocommit', 'max_col_width',
+                        'color_terminal']
             # if key in int_keys: val=int(val)
             for section in (self.config.sections()):
                 if self.config.has_option(section, key):
                     self.config.set(section, key, str(val))
                     if key == 'loading_bar': load_bar = True if val == 'yes' else False
+                    if key == 'color_terminal': color_term = True if val == 'yes' else False
                     self.writeconfig = True
                     break
             self.config.set('display', 'loading_bar', 'yes' if load_bar else 'no')
+            self.config.set('display', 'color_terminal', 'yes' if color_term else 'no')
+
             config_mod.write_config(config_file, self.config)
             if key == 'max_columns': pd.set_option('display.max_columns', self.config.getint('display', 'max_columns'))
             if key == 'max_rows': pd.set_option('display.max_rows', self.config.getint('display', 'max_rows'))
@@ -1253,6 +1268,7 @@ class easy_or(cmd.Cmd, Import, object):
             if key == 'timeout': self.timeout = self.config.getint('easyaccess', 'timeout')
             if key == 'prefetch': self.prefetch = self.config.get('easyaccess', 'prefetch')
             if key == 'loading_bar': self.loading_bar = self.config.getboolean('display', 'loading_bar')
+            if key == 'color_terminal': self.color_terminal = self.config.getboolean('display','color_terminal')
             if key == 'nullvalue': self.nullvalue = self.config.getint('easyaccess', 'nullvalue')
             if key == 'outfile_max_mb': self.outfile_max_mb = self.config.getint('easyaccess', 'outfile_max_mb')
             if key == 'autocommit': self.autocommit = self.config.getboolean('easyaccess', 'autocommit')
@@ -2410,9 +2426,6 @@ def to_pandas(cur):
     return data
 
 
-color_term = True
-
-
 class connect(easy_or):
     def __init__(self, section='', user=None, passwd=None, quiet=False, refresh=False):
         """
@@ -2812,12 +2825,7 @@ if __name__ == '__main__':
     if load_bar:
         from multiprocessing import Process
 
-    color_term = True
-    if not conf.getboolean('display', 'color_terminal'):
-        # Careful, this is duplicated from imports at the top of the file
-        def colored(line, color): return line
-        color_term = False
-
+    color_term = conf.getboolean('display', 'color_terminal')
 
     if args.quiet:
         conf.set('display', 'loading_bar', 'no')
