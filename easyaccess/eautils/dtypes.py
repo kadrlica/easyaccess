@@ -22,7 +22,8 @@ import numpy as np
 # Oracle data types
 or_n = cx_Oracle.NUMBER
 or_s = cx_Oracle.STRING
-or_f = cx_Oracle.NATIVE_FLOAT
+or_f = cx_Oracle.DB_TYPE_BINARY_FLOAT
+or_d = cx_Oracle.DB_TYPE_BINARY_DOUBLE
 or_dt = cx_Oracle.DATETIME
 or_ts = cx_Oracle.TIMESTAMP
 # This is actually OBJECTVAR (hence 'or_ov')
@@ -47,7 +48,14 @@ def oracle2numpy(desc):
     digits = desc[4]
     scale = desc[5]
 
-    if otype == or_n:
+    if otype == or_f:
+        # Binary floats
+        return "f4"
+    elif otype == or_d:
+        # Binary doubles
+        return "f8"
+    elif otype == or_n:
+        # Numbers
         # When no scale/digits avaiable, return float
         if scale is None and digits is None:
             return "f8"
@@ -71,12 +79,6 @@ def oracle2numpy(desc):
             else:
                 # I didn't know this existed...
                 return "f16"
-    elif otype == or_f:
-        # Native floats
-        if size == 4:
-            return "f4"
-        elif size == 8:
-            return "f8"
     elif otype == or_s:
         return "S" + str(size)
     else:
@@ -129,6 +131,9 @@ def numpy2oracle(dtype):
     if (kind == 'S'):
         # string type
         return 'VARCHAR2(%d)' % size
+    #elif (kind == 'b'):
+    #    # boolean (a bit complicated in Oracle)
+    #    return 'BOOLEAN'
     elif (kind == 'i' or kind == 'u'):
         if (size == 1):
             # 1-byte (8 bit) integer
